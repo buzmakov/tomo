@@ -209,6 +209,44 @@ def build_proj_geometry_cone_3d(slices_number, detector_size, angles, source_obj
                                        source_object, object_det)
     return proj_geom
 
+def build_proj_geometry_parallell_vector_3d(slices_number, detector_size, angles, bragg=0):
+    """
+
+    :param slices_number:
+    :param detector_size:
+    :param angles: degrees
+    :param bragg: degrees
+    :return:
+    """
+    detector_spacing_x = 1.0
+    detector_spacing_y = 1.0
+    angles_rad = np.asarray(angles) * np.pi / 180
+
+    vectors = np.zeros((len(angles_rad), 12))
+    alpha = - bragg * np.pi / 180  #  define bragg angle
+    
+    for i in range(len(angles_rad)):
+        # ray direction
+        vectors[i,0] = np.sin(angles_rad[i]) * np.cos(alpha)
+        vectors[i,1] = -np.cos(angles_rad[i]) * np.cos(alpha)
+        vectors[i,2] = np.sin(alpha)
+
+        # center of detector
+        vectors[i,3:6] = 0
+
+        # vector from detector pixel (0,0) to (0,1)
+        vectors[i,6] = np.cos(angles_rad[i])
+        vectors[i,7] = np.sin(angles_rad[i])
+        vectors[i,8] = 0
+
+        # vector from detector pixel (0,0) to (1,0)
+        vectors[i,9] = 0
+        vectors[i,10] = 0
+        vectors[i,11] = 1
+
+    # Parameters: #rows, #columns, vectors
+    proj_geom = astra.create_proj_geom('parallel3d_vec', slices_number, detector_size, vectors)
+    return proj_geom
 
 def astra_fp_3d(volume, proj_geom):
     """
@@ -258,6 +296,18 @@ def astra_fp_3d_parallel(volume, angles):
     rec = astra_fp_3d(volume, proj_geom)
     return rec
 
+def astra_fp_3d_parallel_vec(volume, angles, bragg=0):
+    """
+
+    :param volume:
+    :param angles: degrees
+    :return:
+    """
+    detector_size = volume.shape[1]
+    slices_number = volume.shape[0]
+    proj_geom = build_proj_geometry_parallell_vector_3d(slices_number, detector_size, angles, bragg)
+    rec = astra_fp_3d(volume, proj_geom)
+    return rec
 
 def astra_fp_3d_cone(volume, angles, source_object, object_det):
     """
@@ -338,5 +388,12 @@ def astra_recon_3d_parallel(sinogram, angles, method='CGLS3D_CUDA', n_iters=10, 
     detector_size = sinogram.shape[2]
     slices_number = sinogram.shape[0]
     proj_geom = build_proj_geometry_parallel_3d(slices_number, detector_size, angles)
+    rec = astra_recon_3d(sinogram, proj_geom, method, n_iters, data)
+    return rec
+
+def astra_recon_3d_parallel_vec(sinogram, angles, bragg, method='CGLS3D_CUDA', n_iters=10, data=None):
+    detector_size = sinogram.shape[2]
+    slices_number = sinogram.shape[0]
+    proj_geom = build_proj_geometry_parallell_vector_3d(slices_number, detector_size, angles, bragg)
     rec = astra_recon_3d(sinogram, proj_geom, method, n_iters, data)
     return rec

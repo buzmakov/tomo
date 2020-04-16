@@ -1,5 +1,6 @@
 import astra
 import numpy as np
+from tomopy.misc.phantom import shepp2d, shepp3d
 
 
 def build_proj_geometry_parallel_2d(detector_size, angles):
@@ -43,16 +44,32 @@ def build_volume_geometry_2d(rec_size):
     return vol_geom
 
 
-def astra_recon_2d(sinogram, proj_geom, method='FBP_CUDA', n_iters=10, data=None):
+def astra_recon_2d(sinogram, proj_geom, method=['FBP_CUDA', 1], data=None):
     """
 
     :param proj_geom:
     :param sinogram:
     :param method:
-    :param n_iters:
     :param data:
     :return:
     """
+    methods = []
+
+    if not isinstance(method, list):
+        methods.append([method, 1, {}])
+    else:
+        for m in method:
+            if not isinstance(m, list):
+                methods.append([m, 1, {}])
+            elif len(m) == 1:
+                methods.append([m[0], 1, {}])
+            elif len(m) == 2:
+                methods.append([m[0], m[1], {}])
+            elif len(m) == 3:
+                methods.append(m)
+            else:
+                raise ValueError('Error in methods list: {}'.format(m))
+
     detector_size = sinogram.shape[-1]
 
     rec_size = detector_size
@@ -63,14 +80,16 @@ def astra_recon_2d(sinogram, proj_geom, method='FBP_CUDA', n_iters=10, data=None
     # Create a data object for the reconstruction
     rec_id = astra.data2d.create('-vol', vol_geom, data)
 
-    # Set up the parameters for a reconstruction algorithm using the GPU
-    cfg = astra.astra_dict(method)
-    cfg['ReconstructionDataId'] = rec_id
-    cfg['ProjectionDataId'] = sinogram_id
-    cfg['option'] = {}
+    alg_id = None
 
-    alg_id = astra.algorithm.create(cfg)
-    astra.algorithm.run(alg_id, n_iters)
+    for m in methods:
+        cfg = astra.astra_dict(m[0])
+        cfg['ReconstructionDataId'] = rec_id
+        cfg['ProjectionDataId'] = sinogram_id
+        cfg['option'] = m[2]
+        alg_id = astra.algorithm.create(cfg)
+        astra.algorithm.run(alg_id, m[1])
+
     tomo_rec = astra.data2d.get(rec_id)
     # Clean up. Note that GPU memory is tied up in the algorithm object,
     # and main RAM in the data objects.
@@ -84,22 +103,22 @@ def astra_recon_2d(sinogram, proj_geom, method='FBP_CUDA', n_iters=10, data=None
 def astra_bp_2d_parallel(sinogram, angles, data=None):
     detector_size = sinogram.shape[-1]
     proj_geom = build_proj_geometry_parallel_2d(detector_size, angles)
-    rec = astra_recon_2d(sinogram, proj_geom, "BP_CUDA", 1, data)
+    rec = astra_recon_2d(sinogram, proj_geom, "BP_CUDA", data)
     return rec
 
 
-def astra_recon_2d_parallel(sinogram, angles, method='FBP_CUDA', n_iters=10, data=None):
+def astra_recon_2d_parallel(sinogram, angles, method=['FBP_CUDA', 1], data=None):
     detector_size = sinogram.shape[-1]
     proj_geom = build_proj_geometry_parallel_2d(detector_size, angles)
-    rec = astra_recon_2d(sinogram, proj_geom, method, n_iters, data)
+    rec = astra_recon_2d(sinogram, proj_geom, method, data)
     return rec
 
 
 def astra_recon_2d_fan(sinogram, angles, source_object, object_det,
-                       method='FBP_CUDA', n_iters=10, data=None):
+                       method=['FBP_CUDA', 1], data=None):
     detector_size = sinogram.shape[-1]
     proj_geom = build_proj_geometry_fan_2d(detector_size, angles, source_object, object_det)
-    rec = astra_recon_2d(sinogram, proj_geom, method, n_iters, data)
+    rec = astra_recon_2d(sinogram, proj_geom, method, data)
     return rec
 
 
@@ -209,6 +228,7 @@ def build_proj_geometry_cone_3d(slices_number, detector_size, angles, source_obj
                                        source_object, object_det)
     return proj_geom
 
+
 def build_proj_geometry_parallell_vector_3d(slices_number, detector_size, angles, bragg=0):
     """
 
@@ -223,30 +243,31 @@ def build_proj_geometry_parallell_vector_3d(slices_number, detector_size, angles
     angles_rad = np.asarray(angles) * np.pi / 180
 
     vectors = np.zeros((len(angles_rad), 12))
-    alpha = - bragg * np.pi / 180  #  define bragg angle
-    
+    alpha = - bragg * np.pi / 180  # define bragg angle
+
     for i in range(len(angles_rad)):
         # ray direction
-        vectors[i,0] = np.sin(angles_rad[i]) * np.cos(alpha)
-        vectors[i,1] = -np.cos(angles_rad[i]) * np.cos(alpha)
-        vectors[i,2] = np.sin(alpha)
+        vectors[i, 0] = np.sin(angles_rad[i]) * np.cos(alpha)
+        vectors[i, 1] = -np.cos(angles_rad[i]) * np.cos(alpha)
+        vectors[i, 2] = np.sin(alpha)
 
         # center of detector
-        vectors[i,3:6] = 0
+        vectors[i, 3:6] = 0
 
         # vector from detector pixel (0,0) to (0,1)
-        vectors[i,6] = np.cos(angles_rad[i])
-        vectors[i,7] = np.sin(angles_rad[i])
-        vectors[i,8] = 0
+        vectors[i, 6] = np.cos(angles_rad[i])
+        vectors[i, 7] = np.sin(angles_rad[i])
+        vectors[i, 8] = 0
 
         # vector from detector pixel (0,0) to (1,0)
-        vectors[i,9] = 0
-        vectors[i,10] = 0
-        vectors[i,11] = 1
+        vectors[i, 9] = 0
+        vectors[i, 10] = 0
+        vectors[i, 11] = 1
 
     # Parameters: #rows, #columns, vectors
     proj_geom = astra.create_proj_geom('parallel3d_vec', slices_number, detector_size, vectors)
     return proj_geom
+
 
 def astra_fp_3d(volume, proj_geom):
     """
@@ -296,6 +317,7 @@ def astra_fp_3d_parallel(volume, angles):
     rec = astra_fp_3d(volume, proj_geom)
     return rec
 
+
 def astra_fp_3d_parallel_vec(volume, angles, bragg=0):
     """
 
@@ -308,6 +330,7 @@ def astra_fp_3d_parallel_vec(volume, angles, bragg=0):
     proj_geom = build_proj_geometry_parallell_vector_3d(slices_number, detector_size, angles, bragg)
     rec = astra_fp_3d(volume, proj_geom)
     return rec
+
 
 def astra_fp_3d_cone(volume, angles, source_object, object_det):
     """
@@ -345,7 +368,7 @@ def astra_fp_3d_fan(volume, angles, source_object, object_det):
     return rec
 
 
-def astra_recon_3d(sinogram, proj_geom, method='CGLS3D_CUDA', n_iters=10, data=None):
+def astra_recon_3d(sinogram, proj_geom, method=['CGLS3D_CUDA', 10], data=None):
     """
 
     :param proj_geom:
@@ -355,6 +378,24 @@ def astra_recon_3d(sinogram, proj_geom, method='CGLS3D_CUDA', n_iters=10, data=N
     :param data:
     :return:
     """
+
+    methods = []
+
+    if not isinstance(method, list):
+        methods.append([method, 1, {}])
+    else:
+        for m in method:
+            if not isinstance(m, list):
+                methods.append([m, 1, {}])
+            elif len(m) == 1:
+                methods.append([m[0], 1, {}])
+            elif len(m) == 2:
+                methods.append([m[0], m[1], {}])
+            elif len(m) == 3:
+                methods.append(m)
+            else:
+                raise ValueError('Error in methods list: {}'.format(m))
+
     detector_size = sinogram.shape[-1]
     slices_number = sinogram.shape[0]
 
@@ -366,14 +407,16 @@ def astra_recon_3d(sinogram, proj_geom, method='CGLS3D_CUDA', n_iters=10, data=N
     # Create a data object for the reconstruction
     rec_id = astra.data3d.create('-vol', vol_geom, data)
 
-    # Set up the parameters for a reconstruction algorithm using the GPU
-    cfg = astra.astra_dict(method)
-    cfg['ReconstructionDataId'] = rec_id
-    cfg['ProjectionDataId'] = sinogram_id
-    cfg['option'] = {}
+    alg_id = None
 
-    alg_id = astra.algorithm.create(cfg)
-    astra.algorithm.run(alg_id, n_iters)
+    for m in methods:
+        cfg = astra.astra_dict(m[0])
+        cfg['ReconstructionDataId'] = rec_id
+        cfg['ProjectionDataId'] = sinogram_id
+        cfg['option'] = m[2]
+        alg_id = astra.algorithm.create(cfg)
+        astra.algorithm.run(alg_id, m[1])
+
     tomo_rec = astra.data3d.get(rec_id)
     # Clean up. Note that GPU memory is tied up in the algorithm object,
     # and main RAM in the data objects.
@@ -384,16 +427,68 @@ def astra_recon_3d(sinogram, proj_geom, method='CGLS3D_CUDA', n_iters=10, data=N
     return tomo_rec
 
 
-def astra_recon_3d_parallel(sinogram, angles, method='CGLS3D_CUDA', n_iters=10, data=None):
+def astra_recon_3d_parallel(sinogram, angles, method=['CGLS3D_CUDA', 10], data=None):
     detector_size = sinogram.shape[2]
     slices_number = sinogram.shape[0]
     proj_geom = build_proj_geometry_parallel_3d(slices_number, detector_size, angles)
-    rec = astra_recon_3d(sinogram, proj_geom, method, n_iters, data)
+    rec = astra_recon_3d(sinogram, proj_geom, method, data)
     return rec
 
-def astra_recon_3d_parallel_vec(sinogram, angles, bragg, method='CGLS3D_CUDA', n_iters=10, data=None):
+
+def astra_recon_3d_parallel_vec(sinogram, angles, bragg, method=['CGLS3D_CUDA', 10], data=None):
     detector_size = sinogram.shape[2]
     slices_number = sinogram.shape[0]
     proj_geom = build_proj_geometry_parallell_vector_3d(slices_number, detector_size, angles, bragg)
-    rec = astra_recon_3d(sinogram, proj_geom, method, n_iters, data)
+    rec = astra_recon_3d(sinogram, proj_geom, method, data)
     return rec
+
+
+def test_2d_parallel():
+    phantom = np.squeeze(shepp2d(128))
+    angles = np.arange(0, 180, 1)
+
+    sinogram = astra_fp_2d_parallel(phantom, angles)
+    rec = astra_recon_2d_parallel(sinogram, angles,
+                                  ['FBP_CUDA',
+                                   ['CGLS_CUDA', 10]]
+                                  )
+
+    diff = rec - phantom
+    err = np.sqrt(np.sum(diff ** 2)) / np.prod(rec.shape)
+
+    assert (err < 0.1)
+    #
+    # plt.figure(figsize=(6, 10))
+    # plt.subplot(211)
+    # plt.imshow(phantom - rec)
+    # plt.colorbar()
+    #
+    # plt.subplot(212)
+    # plt.imshow(rec)
+    # plt.colorbar()
+    # plt.show()
+
+
+def test_3d_parallel():
+    phantom = np.squeeze(shepp3d(128))
+    angles = np.arange(0, 180, 1)
+
+    sinogram = astra_fp_3d_parallel(phantom, angles)
+    rec = astra_recon_3d_parallel(sinogram, angles,
+                                  [['CGLS3D_CUDA', 10]]
+                                  )
+
+    diff = rec - phantom
+    err = np.sqrt(np.sum(diff ** 2)) / np.prod(rec.shape)
+
+    assert (err < 0.1)
+    #
+    # plt.figure(figsize=(6, 10))
+    # plt.subplot(211)
+    # plt.imshow(phantom - rec)
+    # plt.colorbar()
+    #
+    # plt.subplot(212)
+    # plt.imshow(rec)
+    # plt.colorbar()
+    # plt.show()

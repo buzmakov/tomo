@@ -44,7 +44,7 @@ def build_volume_geometry_2d(rec_size):
     return vol_geom
 
 
-def astra_recon_2d(sinogram, proj_geom, method=['FBP_CUDA', 1], data=None):
+def astra_recon_2d(sinogram, proj_geom, method=[['FBP_CUDA', 1]], data=None):
     """
 
     :param proj_geom:
@@ -53,22 +53,7 @@ def astra_recon_2d(sinogram, proj_geom, method=['FBP_CUDA', 1], data=None):
     :param data:
     :return:
     """
-    methods = []
-
-    if not isinstance(method, list):
-        methods.append([method, 1, {}])
-    else:
-        for m in method:
-            if not isinstance(m, list):
-                methods.append([m, 1, {}])
-            elif len(m) == 1:
-                methods.append([m[0], 1, {}])
-            elif len(m) == 2:
-                methods.append([m[0], m[1], {}])
-            elif len(m) == 3:
-                methods.append(m)
-            else:
-                raise ValueError('Error in methods list: {}'.format(m))
+    methods = parse_recon_methods(method)
 
     detector_size = sinogram.shape[-1]
 
@@ -89,16 +74,43 @@ def astra_recon_2d(sinogram, proj_geom, method=['FBP_CUDA', 1], data=None):
         cfg['option'] = m[2]
         alg_id = astra.algorithm.create(cfg)
         astra.algorithm.run(alg_id, m[1])
+        astra.algorithm.delete(alg_id)
 
     tomo_rec = astra.data2d.get(rec_id)
     # Clean up. Note that GPU memory is tied up in the algorithm object,
     # and main RAM in the data objects.
-    astra.algorithm.delete(alg_id)
+
     astra.data2d.delete(rec_id)
     astra.data2d.delete(sinogram_id)
     astra.clear()
     return tomo_rec
 
+
+def parse_recon_methods(method):
+    methods = []
+    if isinstance(method, str):
+        methods.append([method, 1, {}])
+    elif isinstance(method, list):
+        for m in method:
+            if not isinstance(m, list):
+                raise ValueError('Need a list. {} given'.format(m))
+            elif len(m) == 1:
+                methods.append([m[0], 1, {}])
+            elif len(m) == 2:
+                methods.append([m[0], m[1], {}])
+            elif len(m) == 3:
+                methods.append(m)
+            else:
+                raise ValueError('Error in methods list: {}'.format(m))
+    else:
+        raise ValueError('Need a string, list. {} given'.format(method))
+    return methods
+
+def test_parse_recon_methods():
+    assert parse_recon_methods('FBP') == [['FBP', 1, {}]]
+    assert parse_recon_methods([['FBP', 1]]) == [['FBP', 1, {}]]
+    # assert parse_recon_methods(['FBP', 1]) != [['FBP', 1, {}]]
+    assert parse_recon_methods([['FBP_CUDA'], ['CGLS_CUDA', 10]]) == [['FBP_CUDA', 1, {}], ['CGLS_CUDA', 10, {}]]
 
 def astra_bp_2d_parallel(sinogram, angles, data=None):
     detector_size = sinogram.shape[-1]
@@ -107,7 +119,7 @@ def astra_bp_2d_parallel(sinogram, angles, data=None):
     return rec
 
 
-def astra_recon_2d_parallel(sinogram, angles, method=['FBP_CUDA', 1], data=None):
+def astra_recon_2d_parallel(sinogram, angles, method=[['FBP_CUDA', 1]], data=None):
     detector_size = sinogram.shape[-1]
     proj_geom = build_proj_geometry_parallel_2d(detector_size, angles)
     rec = astra_recon_2d(sinogram, proj_geom, method, data)
@@ -115,7 +127,7 @@ def astra_recon_2d_parallel(sinogram, angles, method=['FBP_CUDA', 1], data=None)
 
 
 def astra_recon_2d_fan(sinogram, angles, source_object, object_det,
-                       method=['FBP_CUDA', 1], data=None):
+                       method=[['FBP_CUDA', 1]], data=None):
     detector_size = sinogram.shape[-1]
     proj_geom = build_proj_geometry_fan_2d(detector_size, angles, source_object, object_det)
     rec = astra_recon_2d(sinogram, proj_geom, method, data)
@@ -212,7 +224,6 @@ def build_proj_geometry_parallel_3d(slices_number, detector_size, angles):
 
 def build_proj_geometry_cone_3d(slices_number, detector_size, angles, source_object, object_det):
     """
-
     :param slices_number:
     :param detector_size:
     :param angles: degrees
@@ -379,22 +390,7 @@ def astra_recon_3d(sinogram, proj_geom, method=['CGLS3D_CUDA', 10], data=None):
     :return:
     """
 
-    methods = []
-
-    if not isinstance(method, list):
-        methods.append([method, 1, {}])
-    else:
-        for m in method:
-            if not isinstance(m, list):
-                methods.append([m, 1, {}])
-            elif len(m) == 1:
-                methods.append([m[0], 1, {}])
-            elif len(m) == 2:
-                methods.append([m[0], m[1], {}])
-            elif len(m) == 3:
-                methods.append(m)
-            else:
-                raise ValueError('Error in methods list: {}'.format(m))
+    methods = parse_recon_methods(method)
 
     detector_size = sinogram.shape[-1]
     slices_number = sinogram.shape[0]
@@ -416,11 +412,12 @@ def astra_recon_3d(sinogram, proj_geom, method=['CGLS3D_CUDA', 10], data=None):
         cfg['option'] = m[2]
         alg_id = astra.algorithm.create(cfg)
         astra.algorithm.run(alg_id, m[1])
+        astra.algorithm.delete(alg_id)
 
     tomo_rec = astra.data3d.get(rec_id)
     # Clean up. Note that GPU memory is tied up in the algorithm object,
     # and main RAM in the data objects.
-    astra.algorithm.delete(alg_id)
+
     astra.data3d.delete(rec_id)
     astra.data3d.delete(sinogram_id)
     astra.clear()
@@ -443,13 +440,20 @@ def astra_recon_3d_parallel_vec(sinogram, angles, bragg, method=['CGLS3D_CUDA', 
     return rec
 
 
+def astra_recon_3d_cone(sinogram, angles, source_object, object_det, method=['CGLS3D_CUDA', 10], data=None):
+    detector_size = sinogram.shape[2]
+    slices_number = sinogram.shape[0]
+    proj_geom = build_proj_geometry_cone_3d(slices_number, detector_size, angles, source_object, object_det)
+    rec = astra_recon_3d(sinogram, proj_geom, method, data)
+    return rec
+
 def test_2d_parallel():
     phantom = np.squeeze(shepp2d(128))
     angles = np.arange(0, 180, 1)
 
     sinogram = astra_fp_2d_parallel(phantom, angles)
     rec = astra_recon_2d_parallel(sinogram, angles,
-                                  ['FBP_CUDA',
+                                  [['FBP_CUDA'],
                                    ['CGLS_CUDA', 10]]
                                   )
 

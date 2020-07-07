@@ -3,11 +3,12 @@ import numpy as np
 from tomopy.misc.phantom import shepp2d, shepp3d
 
 
-def build_proj_geometry_parallel_2d(detector_size, angles, detector_spacing_x=1.0):
+def build_proj_geometry_parallel_2d(detector_size, angles, detector_spacing_x):
     """
 
     :param detector_size:
     :param angles: degrees
+    :param detector_spacing_x:
     :return:
     """
     angles_rad = np.asarray(angles) * np.pi / 180
@@ -16,13 +17,14 @@ def build_proj_geometry_parallel_2d(detector_size, angles, detector_spacing_x=1.
     return proj_geom
 
 
-def build_proj_geometry_fan_2d(detector_size, angles, source_object, object_det, detector_spacing_x=1.0):
+def build_proj_geometry_fan_2d(detector_size, angles, source_object, object_det, detector_spacing_x):
     """
 
     :param detector_size:
     :param angles: degrees
     :param source_object:
     :param object_det:
+    :param detector_spacing_x:
     :return:
     """
     angles_rad = np.asarray(angles) * np.pi / 180
@@ -41,7 +43,7 @@ def build_volume_geometry_2d(rec_size):
     return vol_geom
 
 
-def astra_recon_2d(sinogram, proj_geom, method=[['FBP_CUDA', 1]], data=None):
+def astra_recon_2d(sinogram, proj_geom, method, data=None):
     """
 
     :param proj_geom:
@@ -61,8 +63,6 @@ def astra_recon_2d(sinogram, proj_geom, method=[['FBP_CUDA', 1]], data=None):
 
     # Create a data object for the reconstruction
     rec_id = astra.data2d.create('-vol', vol_geom, data)
-
-    alg_id = None
 
     for m in methods:
         cfg = astra.astra_dict(m[0])
@@ -111,24 +111,24 @@ def test_parse_recon_methods():
     assert parse_recon_methods([['FBP_CUDA'], ['CGLS_CUDA', 10]]) == [['FBP_CUDA', 1, {}], ['CGLS_CUDA', 10, {}]]
 
 
-def astra_bp_2d_parallel(sinogram, angles, data=None):
+def astra_bp_2d_parallel(sinogram, angles, data=None, detector_spacing_x=1.0):
     detector_size = sinogram.shape[-1]
-    proj_geom = build_proj_geometry_parallel_2d(detector_size, angles)
+    proj_geom = build_proj_geometry_parallel_2d(detector_size, angles, detector_spacing_x)
     rec = astra_recon_2d(sinogram, proj_geom, "BP_CUDA", data)
     return rec
 
 
-def astra_recon_2d_parallel(sinogram, angles, method=[['FBP_CUDA', 1]], data=None):
+def astra_recon_2d_parallel(sinogram, angles, method, data=None, detector_spacing_x=1.0):
     detector_size = sinogram.shape[-1]
-    proj_geom = build_proj_geometry_parallel_2d(detector_size, angles)
+    proj_geom = build_proj_geometry_parallel_2d(detector_size, angles, detector_spacing_x)
     rec = astra_recon_2d(sinogram, proj_geom, method, data)
     return rec
 
 
 def astra_recon_2d_fan(sinogram, angles, source_object, object_det,
-                       method=[['FBP_CUDA', 1]], data=None):
+                       method, data=None, detector_spacing_x=1.0):
     detector_size = sinogram.shape[-1]
-    proj_geom = build_proj_geometry_fan_2d(detector_size, angles, source_object, object_det)
+    proj_geom = build_proj_geometry_fan_2d(detector_size, angles, source_object, object_det, detector_spacing_x)
     rec = astra_recon_2d(sinogram, proj_geom, method, data)
     return rec
 
@@ -167,28 +167,32 @@ def astra_fp_2d(volume, proj_geom):
     return res_sino
 
 
-def astra_fp_2d_parallel(volume, angles):
+def astra_fp_2d_parallel(volume, angles, detector_spacing_x=1.0):
     """
 
     :param volume:
     :param angles: degrees
+    :param detector_spacing_x:
     :return:
     """
     detector_size = volume.shape[1]
-    proj_geom = build_proj_geometry_parallel_2d(detector_size, angles)
+    proj_geom = build_proj_geometry_parallel_2d(detector_size, angles, detector_spacing_x)
     rec = astra_fp_2d(volume, proj_geom)
     return rec
 
 
-def astra_fp_2d_fan(volume, angles, source_object, object_det):
+def astra_fp_2d_fan(volume, angles, source_object, object_det, detector_spacing_x=1.0):
     """
 
     :param volume:
     :param angles: degrees
+    :param source_object:
+    :param object_det:
+    :param detector_spacing_x:
     :return:
     """
     detector_size = volume.shape[1]
-    proj_geom = build_proj_geometry_fan_2d(detector_size, angles, source_object, object_det)
+    proj_geom = build_proj_geometry_fan_2d(detector_size, angles, source_object, object_det, detector_spacing_x)
     rec = astra_fp_2d(volume, proj_geom)
     return rec
 
@@ -205,7 +209,7 @@ def build_volume_geometry_3d(rec_size, slices_number):
 
 
 def build_proj_geometry_parallel_3d(slices_number, detector_size, angles,
-                                    detector_spacing_x=1.0, detector_spacing_y=1.0):
+                                    detector_spacing_x, detector_spacing_y):
     """
 
     :param slices_number:
@@ -221,7 +225,7 @@ def build_proj_geometry_parallel_3d(slices_number, detector_size, angles,
 
 
 def build_proj_geometry_cone_3d(slices_number, detector_size, angles, source_object, object_det,
-                                detector_spacing_x=1.0, detector_spacing_y=1.0):
+                                detector_spacing_x, detector_spacing_y):
     """
     :param slices_number:
     :param detector_size:
@@ -310,7 +314,7 @@ def astra_fp_3d(volume, proj_geom):
     return res_sino
 
 
-def astra_fp_3d_parallel(volume, angles):
+def astra_fp_3d_parallel(volume, angles, detector_spacing_x=1.0, detector_spacing_y=1.0):
     """
 
     :param volume:
@@ -319,7 +323,8 @@ def astra_fp_3d_parallel(volume, angles):
     """
     detector_size = volume.shape[1]
     slices_number = volume.shape[0]
-    proj_geom = build_proj_geometry_parallel_3d(slices_number, detector_size, angles)
+    proj_geom = build_proj_geometry_parallel_3d(slices_number, detector_size, angles,
+                                                detector_spacing_x, detector_spacing_y)
     rec = astra_fp_3d(volume, proj_geom)
     return rec
 
@@ -338,7 +343,8 @@ def astra_fp_3d_parallel_vec(volume, angles, bragg=0):
     return rec
 
 
-def astra_fp_3d_cone(volume, angles, source_object, object_det):
+def astra_fp_3d_cone(volume, angles, source_object, object_det,
+                     detector_spacing_x=1.0, detector_spacing_y=1.0):
     """
 
     :param volume:
@@ -349,38 +355,40 @@ def astra_fp_3d_cone(volume, angles, source_object, object_det):
     """
     detector_size = volume.shape[1]
     slices_number = volume.shape[0]
-    proj_geom = build_proj_geometry_cone_3d(slices_number, detector_size, angles, source_object, object_det)
+    proj_geom = build_proj_geometry_cone_3d(slices_number, detector_size, angles, source_object, object_det,
+                                            detector_spacing_x, detector_spacing_y)
     rec = astra_fp_3d(volume, proj_geom)
     return rec
 
 
-def astra_fp_3d_fan(volume, angles, source_object, object_det):
+def astra_fp_3d_fan(volume, angles, source_object, object_det, detector_spacing_x=1.0):
     """
 
     :param volume:
     :param angles: radians
     :param source_object
     :param object_det
+    :param detector_spacing_x:
     :return:
     """
     detector_size = volume.shape[1]
     slices_number = volume.shape[0]
     angles_number = len(angles)
     rec = np.zeros((slices_number, angles_number, detector_size), dtype='float32')
-    proj_geom = build_proj_geometry_fan_2d(detector_size, angles, source_object, object_det)
+    proj_geom = build_proj_geometry_fan_2d(detector_size, angles, source_object, object_det,
+                                           detector_spacing_x)
     for s in range(slices_number):
         sino_t = astra_fp_2d(np.flipud(volume[s]), proj_geom)  # TODO: check why we should flipud
         rec[s] = sino_t
     return rec
 
 
-def astra_recon_3d(sinogram, proj_geom, method=['CGLS3D_CUDA', 10], data=None):
+def astra_recon_3d(sinogram, proj_geom, method, data=None):
     """
 
-    :param proj_geom:
     :param sinogram:
+    :param proj_geom:
     :param method:
-    :param n_iters:
     :param data:
     :return:
     """
@@ -419,15 +427,17 @@ def astra_recon_3d(sinogram, proj_geom, method=['CGLS3D_CUDA', 10], data=None):
     return tomo_rec
 
 
-def astra_recon_3d_parallel(sinogram, angles, method=['CGLS3D_CUDA', 10], data=None):
+def astra_recon_3d_parallel(sinogram, angles, method, data=None,
+                            detector_spacing_x=1.0, detector_spacing_y=1.0):
     detector_size = sinogram.shape[2]
     slices_number = sinogram.shape[0]
-    proj_geom = build_proj_geometry_parallel_3d(slices_number, detector_size, angles)
+    proj_geom = build_proj_geometry_parallel_3d(slices_number, detector_size, angles,
+                                                detector_spacing_x, detector_spacing_y)
     rec = astra_recon_3d(sinogram, proj_geom, method, data)
     return rec
 
 
-def astra_recon_3d_parallel_vec(sinogram, angles, bragg, method=['CGLS3D_CUDA', 10], data=None):
+def astra_recon_3d_parallel_vec(sinogram, angles, bragg, method, data=None):
     detector_size = sinogram.shape[2]
     slices_number = sinogram.shape[0]
     proj_geom = build_proj_geometry_parallell_vector_3d(slices_number, detector_size, angles, bragg)
@@ -435,10 +445,12 @@ def astra_recon_3d_parallel_vec(sinogram, angles, bragg, method=['CGLS3D_CUDA', 
     return rec
 
 
-def astra_recon_3d_cone(sinogram, angles, source_object, object_det, method=['CGLS3D_CUDA', 10], data=None):
+def astra_recon_3d_cone(sinogram, angles, source_object, object_det, method, data=None,
+                        detector_spacing_x=1.0, detector_spacing_y=1.0):
     detector_size = sinogram.shape[2]
     slices_number = sinogram.shape[0]
-    proj_geom = build_proj_geometry_cone_3d(slices_number, detector_size, angles, source_object, object_det)
+    proj_geom = build_proj_geometry_cone_3d(slices_number, detector_size, angles, source_object, object_det,
+                                            detector_spacing_x, detector_spacing_y)
     rec = astra_recon_3d(sinogram, proj_geom, method, data)
     return rec
 

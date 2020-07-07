@@ -3,21 +3,20 @@ import numpy as np
 from tomopy.misc.phantom import shepp2d, shepp3d
 
 
-def build_proj_geometry_parallel_2d(detector_size, angles):
+def build_proj_geometry_parallel_2d(detector_size, angles, detector_spacing_x=1.0):
     """
 
     :param detector_size:
     :param angles: degrees
     :return:
     """
-    detector_spacing_x = 1.0
     angles_rad = np.asarray(angles) * np.pi / 180
     proj_geom = astra.create_proj_geom('parallel',
                                        detector_spacing_x, detector_size, angles_rad)
     return proj_geom
 
 
-def build_proj_geometry_fan_2d(detector_size, angles, source_object, object_det):
+def build_proj_geometry_fan_2d(detector_size, angles, source_object, object_det, detector_spacing_x=1.0):
     """
 
     :param detector_size:
@@ -26,8 +25,6 @@ def build_proj_geometry_fan_2d(detector_size, angles, source_object, object_det)
     :param object_det:
     :return:
     """
-    detector_spacing_x = 1.0
-
     angles_rad = np.asarray(angles) * np.pi / 180
     proj_geom = astra.create_proj_geom("fanflat", detector_spacing_x, detector_size, angles_rad,
                                        source_object, object_det)
@@ -106,11 +103,13 @@ def parse_recon_methods(method):
         raise ValueError('Need a string, list. {} given'.format(method))
     return methods
 
+
 def test_parse_recon_methods():
     assert parse_recon_methods('FBP') == [['FBP', 1, {}]]
     assert parse_recon_methods([['FBP', 1]]) == [['FBP', 1, {}]]
     # assert parse_recon_methods(['FBP', 1]) != [['FBP', 1, {}]]
     assert parse_recon_methods([['FBP_CUDA'], ['CGLS_CUDA', 10]]) == [['FBP_CUDA', 1, {}], ['CGLS_CUDA', 10, {}]]
+
 
 def astra_bp_2d_parallel(sinogram, angles, data=None):
     detector_size = sinogram.shape[-1]
@@ -205,7 +204,8 @@ def build_volume_geometry_3d(rec_size, slices_number):
     return vol_geom
 
 
-def build_proj_geometry_parallel_3d(slices_number, detector_size, angles):
+def build_proj_geometry_parallel_3d(slices_number, detector_size, angles,
+                                    detector_spacing_x=1.0, detector_spacing_y=1.0):
     """
 
     :param slices_number:
@@ -213,8 +213,6 @@ def build_proj_geometry_parallel_3d(slices_number, detector_size, angles):
     :param angles: degrees
     :return:
     """
-    detector_spacing_x = 1.0
-    detector_spacing_y = 1.0
     angles_rad = np.asarray(angles) * np.pi / 180
     proj_geom = astra.create_proj_geom('parallel3d',
                                        detector_spacing_x, detector_spacing_y,
@@ -222,7 +220,8 @@ def build_proj_geometry_parallel_3d(slices_number, detector_size, angles):
     return proj_geom
 
 
-def build_proj_geometry_cone_3d(slices_number, detector_size, angles, source_object, object_det):
+def build_proj_geometry_cone_3d(slices_number, detector_size, angles, source_object, object_det,
+                                detector_spacing_x=1.0, detector_spacing_y=1.0):
     """
     :param slices_number:
     :param detector_size:
@@ -231,8 +230,6 @@ def build_proj_geometry_cone_3d(slices_number, detector_size, angles, source_obj
     :param object_det:
     :return:
     """
-    detector_spacing_x = 1.0
-    detector_spacing_y = 1.0
     angles_rad = np.asarray(angles) * np.pi / 180
     proj_geom = astra.create_proj_geom('cone', detector_spacing_x, detector_spacing_y,
                                        slices_number, detector_size, angles_rad,
@@ -249,8 +246,6 @@ def build_proj_geometry_parallell_vector_3d(slices_number, detector_size, angles
     :param bragg: degrees
     :return:
     """
-    detector_spacing_x = 1.0
-    detector_spacing_y = 1.0
     angles_rad = np.asarray(angles) * np.pi / 180
 
     vectors = np.zeros((len(angles_rad), 12))
@@ -446,6 +441,7 @@ def astra_recon_3d_cone(sinogram, angles, source_object, object_det, method=['CG
     proj_geom = build_proj_geometry_cone_3d(slices_number, detector_size, angles, source_object, object_det)
     rec = astra_recon_3d(sinogram, proj_geom, method, data)
     return rec
+
 
 def test_2d_parallel():
     phantom = np.squeeze(shepp2d(128))

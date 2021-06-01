@@ -2,6 +2,8 @@ import astra
 import numpy as np
 from tomopy.misc.phantom import shepp2d, shepp3d
 
+import recon.NesterovGradient as NesterovGradient
+
 
 def build_proj_geometry_parallel_2d(detector_size, angles, detector_spacing_x):
     """
@@ -69,6 +71,10 @@ def astra_recon_2d(sinogram, proj_geom, method, data=None):
         cfg['ReconstructionDataId'] = rec_id
         cfg['ProjectionDataId'] = sinogram_id
         cfg['option'] = m[2]
+        if m[0] == 'AGD-PLUGIN':
+            astra.plugin.register(NesterovGradient.AcceleratedGradientPlugin)
+            projector_id = astra.create_projector('cuda', proj_geom, vol_geom)
+            cfg['ProjectorId'] = projector_id
         alg_id = astra.algorithm.create(cfg)
         astra.algorithm.run(alg_id, m[1])
         astra.algorithm.delete(alg_id)
@@ -302,13 +308,15 @@ def astra_recon_3d(sinogram, proj_geom, method, data=None):
     # Create a data object for the reconstruction
     rec_id = astra.data3d.create('-vol', vol_geom, data)
 
-    alg_id = None
-
     for m in methods:
         cfg = astra.astra_dict(m[0])
         cfg['ReconstructionDataId'] = rec_id
         cfg['ProjectionDataId'] = sinogram_id
         cfg['option'] = m[2]
+        if m[0] == 'AGD-PLUGIN':
+            astra.plugin.register(NesterovGradient.AcceleratedGradientPlugin)
+            projector_id = astra.create_projector('cuda3d', proj_geom, vol_geom)
+            cfg['ProjectorId'] = projector_id
         alg_id = astra.algorithm.create(cfg)
         astra.algorithm.run(alg_id, m[1])
         astra.algorithm.delete(alg_id)
@@ -461,14 +469,17 @@ def test_2d_parallel():
     sinogram = astra_fp_2d_parallel(phantom, angles)
     rec = astra_recon_2d_parallel(sinogram, angles,
                                   [['FBP_CUDA'],
-                                   ['CGLS_CUDA', 10]]
+                                   ['CGLS_CUDA', 10]
+                                   # ['AGD-PLUGIN', 10]
+                                   ]
                                   )
 
     diff = rec - phantom
     err = np.sqrt(np.sum(diff ** 2)) / np.prod(rec.shape)
 
     assert (err < 0.1)
-    #
+
+    # import pylab as plt
     # plt.figure(figsize=(6, 10))
     # plt.subplot(211)
     # plt.imshow(phantom - rec)
@@ -486,20 +497,22 @@ def test_3d_parallel():
 
     sinogram = astra_fp_3d_parallel(phantom, angles)
     rec = astra_recon_3d_parallel(sinogram, angles,
-                                  [['CGLS3D_CUDA', 10]]
+                                  [['CGLS3D_CUDA', 20]]
+                                  # [['AGD-PLUGIN', 20]]
                                   )
 
     diff = rec - phantom
     err = np.sqrt(np.sum(diff ** 2)) / np.prod(rec.shape)
 
     assert (err < 0.1)
-    #
+
+    # import pylab as plt
     # plt.figure(figsize=(6, 10))
     # plt.subplot(211)
-    # plt.imshow(phantom - rec)
+    # plt.imshow(phantom[64] - rec[64])
     # plt.colorbar()
     #
     # plt.subplot(212)
-    # plt.imshow(rec)
+    # plt.imshow(rec[64])
     # plt.colorbar()
     # plt.show()

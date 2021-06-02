@@ -12,8 +12,8 @@ def generate_pantom():
     intensity[size // 3, size // 3:2 * size // 3] = 1.
     phase[size // 3, size // 3:2 * size // 3] = 0
 
-    intensity[size // 3 + 1:2 * size // 3, size // 2] = 0.5
-    phase[size // 3 + 1:2 * size // 3, size // 2] = np.pi / 4
+    intensity[size // 3 + 1:2 * size // 3, size // 2 + 5] = 0.5
+    phase[size // 3 + 1:2 * size // 3, size // 2 +5] = np.pi/2
     return intensity, phase
 
 
@@ -62,10 +62,23 @@ def recon_tomo(sinogram, angles, show=True):
 
 
 def recon_topo(sinogram, angles, show=True):
+    bp = np.zeros((len(angles), sinogram.shape[1], sinogram.shape[1]), dtype=np.float32)
+    for ia, angle in enumerate(angles):
+        bp[ia] = astra_utils.astra_bp_2d_parallel(sinogram[None, ia], [np.rad2deg(angle),])
+
+    # if show:
+    #     ax=0
+    #     for i in range(0,bp.shape[ax], 10):
+    #         plt.figure()
+    #         plt.imshow(bp.take(i, axis=ax))
+    #         plt.show()
+
+
     rec = astra_utils.astra_recon_2d_parallel(
         sinogram,
         np.rad2deg(angles),
         [["CGLS_CUDA", 50]])
+
     if show:
         plt.figure()
         plt.imshow(rec)
@@ -76,8 +89,11 @@ def recon_topo(sinogram, angles, show=True):
 if __name__ == "__main__":
     intensity, phase = generate_pantom()
     show_complex_image(intensity, phase)
-    angles = np.linspace(0, np.pi, 180)
+    angles = np.linspace(0, 2*np.pi, 100)
+
+    # sinogram_tomo = generate_projections(intensity, None, angles)
+    # rec_tomo = recon_tomo(sinogram_tomo, angles)
+
     sinogram_topo = generate_projections(intensity, phase, angles)
-    sinogram_tomo = generate_projections(intensity, None, angles)
-    rec_topo = recon_tomo(sinogram_topo, angles)
-    rec_tomo = recon_tomo(sinogram_tomo, angles)
+    rec_topo = recon_topo(sinogram_topo, angles)
+

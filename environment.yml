@@ -1,0 +1,21 @@
+name: tomo
+channels:
+  - astra-toolbox/label/dev
+  - conda-forge
+  - defaults
+dependencies:
+  - numpy
+  - matplotlib
+  - astra-toolbox
+  - tomopy
+  - pytest
+  - ipython
+  - jupyter
+  - jupyterlab
+  - jupytext
+  - nodejs
+  - cupy
+  - python=3.7
+  - numba
+  - tqdm
+  - mypy

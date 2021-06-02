@@ -2,6 +2,8 @@ import astra
 import numpy as np
 from tomopy.misc.phantom import shepp2d, shepp3d
 
+import recon.NesterovGradient as NesterovGradient
+
 
 def build_proj_geometry_parallel_2d(detector_size, angles, detector_spacing_x):
     """
@@ -69,6 +71,10 @@ def astra_recon_2d(sinogram, proj_geom, method, data=None):
         cfg['ReconstructionDataId'] = rec_id
         cfg['ProjectionDataId'] = sinogram_id
         cfg['option'] = m[2]
+        if m[0] == 'AGD-PLUGIN':
+            astra.plugin.register(NesterovGradient.AcceleratedGradientPlugin)
+            projector_id = astra.create_projector('cuda', proj_geom, vol_geom)
+            cfg['ProjectorId'] = projector_id
         alg_id = astra.algorithm.create(cfg)
         astra.algorithm.run(alg_id, m[1])
         astra.algorithm.delete(alg_id)
@@ -81,6 +87,21 @@ def astra_recon_2d(sinogram, proj_geom, method, data=None):
     astra.data2d.delete(sinogram_id)
     astra.clear()
     return tomo_rec
+
+
+def astra_recon_2d_parallel(sinogram, angles, method, data=None, detector_spacing_x=1.0):
+    detector_size = sinogram.shape[-1]
+    proj_geom = build_proj_geometry_parallel_2d(detector_size, angles, detector_spacing_x)
+    rec = astra_recon_2d(sinogram, proj_geom, method, data)
+    return rec
+
+
+def astra_recon_2d_fan(sinogram, angles, source_object, object_det,
+                       method, data=None, detector_spacing_x=1.0):
+    detector_size = sinogram.shape[-1]
+    proj_geom = build_proj_geometry_fan_2d(detector_size, angles, source_object, object_det, detector_spacing_x)
+    rec = astra_recon_2d(sinogram, proj_geom, method, data)
+    return rec
 
 
 def parse_recon_methods(method):
@@ -115,21 +136,6 @@ def astra_bp_2d_parallel(sinogram, angles, data=None, detector_spacing_x=1.0):
     detector_size = sinogram.shape[-1]
     proj_geom = build_proj_geometry_parallel_2d(detector_size, angles, detector_spacing_x)
     rec = astra_recon_2d(sinogram, proj_geom, "BP_CUDA", data)
-    return rec
-
-
-def astra_recon_2d_parallel(sinogram, angles, method, data=None, detector_spacing_x=1.0):
-    detector_size = sinogram.shape[-1]
-    proj_geom = build_proj_geometry_parallel_2d(detector_size, angles, detector_spacing_x)
-    rec = astra_recon_2d(sinogram, proj_geom, method, data)
-    return rec
-
-
-def astra_recon_2d_fan(sinogram, angles, source_object, object_det,
-                       method, data=None, detector_spacing_x=1.0):
-    detector_size = sinogram.shape[-1]
-    proj_geom = build_proj_geometry_fan_2d(detector_size, angles, source_object, object_det, detector_spacing_x)
-    rec = astra_recon_2d(sinogram, proj_geom, method, data)
     return rec
 
 
@@ -279,6 +285,80 @@ def build_proj_geometry_parallell_vector_3d(slices_number, detector_size, angles
     return proj_geom
 
 
+def astra_recon_3d(sinogram, proj_geom, method, data=None):
+    """
+
+    :param sinogram:
+    :param proj_geom:
+    :param method:
+    :param data:
+    :return:
+    """
+
+    methods = parse_recon_methods(method)
+
+    detector_size = sinogram.shape[-1]
+    slices_number = sinogram.shape[0]
+
+    rec_size = detector_size
+    vol_geom = astra.create_vol_geom(rec_size, rec_size, slices_number)
+
+    sinogram_id = astra.data3d.create('-sino', proj_geom, data=sinogram)
+
+    # Create a data object for the reconstruction
+    rec_id = astra.data3d.create('-vol', vol_geom, data)
+
+    for m in methods:
+        cfg = astra.astra_dict(m[0])
+        cfg['ReconstructionDataId'] = rec_id
+        cfg['ProjectionDataId'] = sinogram_id
+        cfg['option'] = m[2]
+        if m[0] == 'AGD-PLUGIN':
+            astra.plugin.register(NesterovGradient.AcceleratedGradientPlugin)
+            projector_id = astra.create_projector('cuda3d', proj_geom, vol_geom)
+            cfg['ProjectorId'] = projector_id
+        alg_id = astra.algorithm.create(cfg)
+        astra.algorithm.run(alg_id, m[1])
+        astra.algorithm.delete(alg_id)
+
+    tomo_rec = astra.data3d.get(rec_id)
+    # Clean up. Note that GPU memory is tied up in the algorithm object,
+    # and main RAM in the data objects.
+
+    astra.data3d.delete(rec_id)
+    astra.data3d.delete(sinogram_id)
+    astra.clear()
+    return tomo_rec
+
+
+def astra_recon_3d_parallel(sinogram, angles, method, data=None,
+                            detector_spacing_x=1.0, detector_spacing_y=1.0):
+    detector_size = sinogram.shape[2]
+    slices_number = sinogram.shape[0]
+    proj_geom = build_proj_geometry_parallel_3d(slices_number, detector_size, angles,
+                                                detector_spacing_x, detector_spacing_y)
+    rec = astra_recon_3d(sinogram, proj_geom, method, data)
+    return rec
+
+
+def astra_recon_3d_parallel_vec(sinogram, angles, bragg, method, data=None):
+    detector_size = sinogram.shape[2]
+    slices_number = sinogram.shape[0]
+    proj_geom = build_proj_geometry_parallell_vector_3d(slices_number, detector_size, angles, bragg)
+    rec = astra_recon_3d(sinogram, proj_geom, method, data)
+    return rec
+
+
+def astra_recon_3d_cone(sinogram, angles, source_object, object_det, method, data=None,
+                        detector_spacing_x=1.0, detector_spacing_y=1.0):
+    detector_size = sinogram.shape[2]
+    slices_number = sinogram.shape[0]
+    proj_geom = build_proj_geometry_cone_3d(slices_number, detector_size, angles, source_object, object_det,
+                                            detector_spacing_x, detector_spacing_y)
+    rec = astra_recon_3d(sinogram, proj_geom, method, data)
+    return rec
+
+
 def astra_fp_3d(volume, proj_geom):
     """
     :param proj_geom:
@@ -382,79 +462,6 @@ def astra_fp_3d_fan(volume, angles, source_object, object_det, detector_spacing_
         rec[s] = sino_t
     return rec
 
-
-def astra_recon_3d(sinogram, proj_geom, method, data=None):
-    """
-
-    :param sinogram:
-    :param proj_geom:
-    :param method:
-    :param data:
-    :return:
-    """
-
-    methods = parse_recon_methods(method)
-
-    detector_size = sinogram.shape[-1]
-    slices_number = sinogram.shape[0]
-
-    rec_size = detector_size
-    vol_geom = astra.create_vol_geom(rec_size, rec_size, slices_number)
-
-    sinogram_id = astra.data3d.create('-sino', proj_geom, data=sinogram)
-
-    # Create a data object for the reconstruction
-    rec_id = astra.data3d.create('-vol', vol_geom, data)
-
-    alg_id = None
-
-    for m in methods:
-        cfg = astra.astra_dict(m[0])
-        cfg['ReconstructionDataId'] = rec_id
-        cfg['ProjectionDataId'] = sinogram_id
-        cfg['option'] = m[2]
-        alg_id = astra.algorithm.create(cfg)
-        astra.algorithm.run(alg_id, m[1])
-        astra.algorithm.delete(alg_id)
-
-    tomo_rec = astra.data3d.get(rec_id)
-    # Clean up. Note that GPU memory is tied up in the algorithm object,
-    # and main RAM in the data objects.
-
-    astra.data3d.delete(rec_id)
-    astra.data3d.delete(sinogram_id)
-    astra.clear()
-    return tomo_rec
-
-
-def astra_recon_3d_parallel(sinogram, angles, method, data=None,
-                            detector_spacing_x=1.0, detector_spacing_y=1.0):
-    detector_size = sinogram.shape[2]
-    slices_number = sinogram.shape[0]
-    proj_geom = build_proj_geometry_parallel_3d(slices_number, detector_size, angles,
-                                                detector_spacing_x, detector_spacing_y)
-    rec = astra_recon_3d(sinogram, proj_geom, method, data)
-    return rec
-
-
-def astra_recon_3d_parallel_vec(sinogram, angles, bragg, method, data=None):
-    detector_size = sinogram.shape[2]
-    slices_number = sinogram.shape[0]
-    proj_geom = build_proj_geometry_parallell_vector_3d(slices_number, detector_size, angles, bragg)
-    rec = astra_recon_3d(sinogram, proj_geom, method, data)
-    return rec
-
-
-def astra_recon_3d_cone(sinogram, angles, source_object, object_det, method, data=None,
-                        detector_spacing_x=1.0, detector_spacing_y=1.0):
-    detector_size = sinogram.shape[2]
-    slices_number = sinogram.shape[0]
-    proj_geom = build_proj_geometry_cone_3d(slices_number, detector_size, angles, source_object, object_det,
-                                            detector_spacing_x, detector_spacing_y)
-    rec = astra_recon_3d(sinogram, proj_geom, method, data)
-    return rec
-
-
 def test_2d_parallel():
     phantom = np.squeeze(shepp2d(128))
     angles = np.arange(0, 180, 1)
@@ -462,14 +469,17 @@ def test_2d_parallel():
     sinogram = astra_fp_2d_parallel(phantom, angles)
     rec = astra_recon_2d_parallel(sinogram, angles,
                                   [['FBP_CUDA'],
-                                   ['CGLS_CUDA', 10]]
+                                   ['CGLS_CUDA', 10]
+                                   # ['AGD-PLUGIN', 10]
+                                   ]
                                   )
 
     diff = rec - phantom
     err = np.sqrt(np.sum(diff ** 2)) / np.prod(rec.shape)
 
     assert (err < 0.1)
-    #
+
+    # import pylab as plt
     # plt.figure(figsize=(6, 10))
     # plt.subplot(211)
     # plt.imshow(phantom - rec)
@@ -487,20 +497,22 @@ def test_3d_parallel():
 
     sinogram = astra_fp_3d_parallel(phantom, angles)
     rec = astra_recon_3d_parallel(sinogram, angles,
-                                  [['CGLS3D_CUDA', 10]]
+                                  [['CGLS3D_CUDA', 20]]
+                                  # [['AGD-PLUGIN', 20]]
                                   )
 
     diff = rec - phantom
     err = np.sqrt(np.sum(diff ** 2)) / np.prod(rec.shape)
 
     assert (err < 0.1)
-    #
+
+    # import pylab as plt
     # plt.figure(figsize=(6, 10))
     # plt.subplot(211)
-    # plt.imshow(phantom - rec)
+    # plt.imshow(phantom[64] - rec[64])
     # plt.colorbar()
     #
     # plt.subplot(212)
-    # plt.imshow(rec)
+    # plt.imshow(rec[64])
     # plt.colorbar()
     # plt.show()

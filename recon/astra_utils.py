@@ -2,7 +2,7 @@ import astra
 import numpy as np
 from tomopy.misc.phantom import shepp2d, shepp3d
 
-import recon.NesterovGradient as NesterovGradient
+import tomo.recon.NesterovGradient as NesterovGradient
 
 
 def build_proj_geometry_parallel_2d(detector_size, angles, detector_spacing_x):

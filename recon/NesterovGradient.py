@@ -28,7 +28,7 @@ class AcceleratedGradientPlugin(astra.plugin.base):
         b_k = np.random.rand(A.shape[1])
         b_k1_norm = 1
 
-        print('running power iteration to determine step size', flush=True)
+#         print('running power iteration to determine step size', flush=True)
         for i in range(num_simulations):
             # calculate the matrix-by-vector product Ab
             b_k1 = A.T * A * b_k
@@ -61,7 +61,7 @@ class AcceleratedGradientPlugin(astra.plugin.base):
 
         self.ATy = self.W.BP(s)
         self.obj_func = None
-        print('plugin initialized.', flush=True)
+#         print('plugin initialized.', flush=True)
 
     def run(self, its):
         v = self.data_mod.get_shared(self.vid)
@@ -80,10 +80,10 @@ class AcceleratedGradientPlugin(astra.plugin.base):
 
         self.obj_func = np.zeros(its)
 
-        print('running', str(its), 'iterations of Accelerated Gradient plugin.', flush=True)
+#         print('running', str(its), 'iterations of Accelerated Gradient plugin.', flush=True)
         for i in range(its):
-            if i % 10 == 0:
-                print('iteration', str(i), '/', str(its), flush=True)
+#             if i % 10 == 0:
+#                 print('iteration', str(i), '/', str(its), flush=True)
 
             tau = (t_acc - 1) / (t_acc + 2)
             t_acc = t_acc + 1

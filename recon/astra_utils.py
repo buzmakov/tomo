@@ -428,7 +428,7 @@ def astra_fp_3d_cone(volume, angles, source_object, object_det,
     """
 
     :param volume:
-    :param angles: radians
+    :param angles: degrees
     :param source_object
     :param object_det
     :return:
@@ -445,7 +445,7 @@ def astra_fp_3d_fan(volume, angles, source_object, object_det, detector_spacing_
     """
 
     :param volume:
-    :param angles: radians
+    :param angles: degrees
     :param source_object
     :param object_det
     :param detector_spacing_x:
